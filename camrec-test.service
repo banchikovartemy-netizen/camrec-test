@@ -1,0 +1,23 @@
+[Unit]
+Description=CamRec Test USB/IP camera recorder
+After=local-fs.target network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=camrectest
+Group=camrectest
+SupplementaryGroups=video
+ExecStart=/usr/bin/python3 /opt/camrec-test/cam_daemon.py
+Restart=always
+RestartSec=3
+RuntimeDirectory=camrec-test
+RuntimeDirectoryMode=0755
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
