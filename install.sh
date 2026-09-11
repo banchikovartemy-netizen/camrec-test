@@ -44,8 +44,10 @@ done
 mkdir -p "$APP_DIR" "$ARCHIVE_DIR" "$LOG_DIR"
 curl -fsSL "$REPO_RAW/camrec_daemon.py" -o "$APP_DIR/camrec_daemon.py"
 curl -fsSL "$REPO_RAW/camrec_gui.py" -o "$APP_DIR/camrec_gui.py"
+curl -fsSL "$REPO_RAW/camrec_actions.py" -o "$APP_DIR/camrec_actions.py"
+curl -fsSL "$REPO_RAW/camrec_preview.py" -o "$APP_DIR/camrec_preview.py"
 curl -fsSL "$REPO_RAW/camrec.service" -o "$SERVICE"
-chmod 0755 "$APP_DIR/camrec_daemon.py" "$APP_DIR/camrec_gui.py"
+chmod 0755 "$APP_DIR/camrec_daemon.py" "$APP_DIR/camrec_gui.py" "$APP_DIR/camrec_actions.py" "$APP_DIR/camrec_preview.py"
 chmod 0644 "$SERVICE"
 
 if [[ -d /var/lib/camrec-test/archive ]]; then
