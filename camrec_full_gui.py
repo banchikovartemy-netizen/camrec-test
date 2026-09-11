@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from camrec_gui import CamRecApp, CONFIG_FILE, DEFAULT_CONFIG, read_json, write_json_inplace
 from camrec_actions import LinuxActionsMixin
@@ -18,7 +18,7 @@ class FullCamRec(LinuxActionsMixin, CamRecApp):
     def _build(self):
         super()._build()
         extra = ttk.LabelFrame(self, text='Сохранение и экран записи', padding=8)
-        extra.pack(fill='x', padx=12, pady=(0, 8), before=self.children.get('!labelframe2') if '!labelframe2' in self.children else None)
+        extra.pack(fill='x', padx=12, pady=(0, 8))
         self.saved_dir_var = tk.StringVar(value='')
         ttk.Label(extra, text='Папка для готовых записей:').pack(side='left')
         ttk.Entry(extra, textvariable=self.saved_dir_var, width=42).pack(side='left', padx=6, fill='x', expand=True)
@@ -52,7 +52,6 @@ class FullCamRec(LinuxActionsMixin, CamRecApp):
     def start_recording(self):
         self.collect_settings()
         if self.source_var.get() == 'network' and not self.cfg.get('network_url'):
-            from tkinter import messagebox
             messagebox.showwarning('CamRec', 'Сначала подключи IP-камеру и укажи RTSP/HTTP URL.')
             return
         if self.set_status('play', preview=True):
