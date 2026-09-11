@@ -9,6 +9,7 @@ LOG_DIR="/var/log/camrec"
 SERVICE="/etc/systemd/system/camrec.service"
 LAUNCHER="/usr/local/bin/camrec"
 UNINSTALLER="/usr/local/bin/camrec-uninstall"
+DESKTOP_FILE="/usr/share/applications/camrec.desktop"
 DESKTOP_USER="${SUDO_USER:-}"
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -30,6 +31,7 @@ else
   exit 1
 fi
 
+# Останавливаем старую тестовую службу, но не удаляем старый архив.
 systemctl disable --now camrec-test.service 2>/dev/null || true
 rm -f /etc/systemd/system/camrec-test.service /usr/local/bin/camrec-test /usr/local/bin/camrec-test-uninstall
 rm -rf /opt/camrec-test
@@ -46,44 +48,64 @@ for g in video audio; do
   fi
 done
 
-mkdir -p "$APP_DIR" "$ARCHIVE_DIR" "$LOG_DIR"
+mkdir -p "$APP_DIR" "$ARCHIVE_DIR" "$LOG_DIR" /usr/share/applications
 curl -fsSL "$REPO_RAW/camrec_daemon.py" -o "$APP_DIR/camrec_daemon.py"
 curl -fsSL "$REPO_RAW/camrec_gui.py" -o "$APP_DIR/camrec_gui.py"
 curl -fsSL "$REPO_RAW/camrec.service" -o "$SERVICE"
 chmod 0755 "$APP_DIR/camrec_daemon.py" "$APP_DIR/camrec_gui.py"
 chmod 0644 "$SERVICE"
 
+# Переносим старые тестовые записи в новый архив без перезаписи файлов.
 if [[ -d /var/lib/camrec-test/archive ]]; then
   cp -an /var/lib/camrec-test/archive/. "$ARCHIVE_DIR/" 2>/dev/null || true
 fi
 
-if [[ ! -f "$DATA_DIR/settings.json" ]]; then
-  cat > "$DATA_DIR/settings.json" <<'JSON'
-{
-  "status": "stop",
-  "source_type": "usb",
-  "usb_device": "/dev/video0",
-  "network_url": "",
-  "resolution": "640x480",
-  "framerate": 30,
-  "retention_days": 7,
-  "segment_minutes": 5,
-  "audio_enabled": false,
-  "usb_audio_device": "default",
-  "autostart_enabled": false,
-  "autostart_source": "usb"
-}
-JSON
+# Сохраняем настройки тестовой версии при первом переходе на полную.
+if [[ ! -f "$DATA_DIR/settings.json" && -f /var/lib/camrec-test/settings.json ]]; then
+  cp /var/lib/camrec-test/settings.json "$DATA_DIR/settings.json"
+fi
+if [[ ! -f "$DATA_DIR/credentials.json" && -f /var/lib/camrec-test/credentials.json ]]; then
+  cp /var/lib/camrec-test/credentials.json "$DATA_DIR/credentials.json"
 fi
 
-if [[ ! -f "$DATA_DIR/credentials.json" ]]; then
-  cat > "$DATA_DIR/credentials.json" <<'JSON'
-{
-  "username": "",
-  "password": ""
-}
-JSON
+if [[ ! -f "$DATA_DIR/settings.json" ]]; then
+  echo '{}' > "$DATA_DIR/settings.json"
 fi
+if [[ ! -f "$DATA_DIR/credentials.json" ]]; then
+  echo '{"username":"","password":""}' > "$DATA_DIR/credentials.json"
+fi
+
+# Добавляем новые параметры, не ломая уже сохранённые настройки.
+python3 - "$DATA_DIR/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+defaults = {
+    "status": "stop",
+    "source_type": "usb",
+    "usb_device": "/dev/video0",
+    "network_url": "",
+    "resolution": "640x480",
+    "framerate": 30,
+    "retention_days": 7,
+    "segment_minutes": 5,
+    "audio_enabled": False,
+    "usb_audio_device": "default",
+    "autostart_enabled": False,
+    "autostart_source": "usb"
+}
+try:
+    with open(p, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        data = {}
+except Exception:
+    data = {}
+for k, v in defaults.items():
+    data.setdefault(k, v)
+data['status'] = 'stop'
+with open(p, 'w', encoding='utf-8') as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+PY
 
 chown -R camrec:camrec "$ARCHIVE_DIR" "$LOG_DIR"
 chmod 2775 "$ARCHIVE_DIR" "$LOG_DIR"
@@ -104,6 +126,18 @@ exec /usr/bin/python3 /opt/camrec/camrec_gui.py "$@"
 EOF
 chmod 0755 "$LAUNCHER"
 
+cat > "$DESKTOP_FILE" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=CamRec
+Comment=Запись с веб-камеры и IP-камеры
+Exec=/usr/local/bin/camrec
+Terminal=false
+Categories=AudioVideo;Video;
+StartupNotify=true
+EOF
+chmod 0644 "$DESKTOP_FILE"
+
 cat > "$UNINSTALLER" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -112,7 +146,7 @@ if [[ "$EUID" -ne 0 ]]; then
   exit 1
 fi
 systemctl disable --now camrec.service 2>/dev/null || true
-rm -f /etc/systemd/system/camrec.service
+rm -f /etc/systemd/system/camrec.service /usr/share/applications/camrec.desktop
 systemctl daemon-reload
 rm -rf /opt/camrec
 rm -f /usr/local/bin/camrec /usr/local/bin/camrec-uninstall
@@ -126,6 +160,7 @@ systemctl enable --now camrec.service
 echo
 echo "Готово. Запуск интерфейса:"
 echo "  camrec"
+echo "Или открой CamRec из меню приложений."
 echo
 echo "Записи:"
 echo "  /var/lib/camrec/archive"
