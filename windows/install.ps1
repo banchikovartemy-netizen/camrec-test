@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-$RepoRaw = 'https://raw.githubusercontent.com/banchikovartemy-netizen/camrec-test/main/windows'
+$RepoRoot = 'https://raw.githubusercontent.com/banchikovartemy-netizen/camrec-test/main'
+$RepoRaw = "$RepoRoot/windows"
 $AppDir = Join-Path $env:LOCALAPPDATA 'Programs\CamRec'
 $DataDir = Join-Path $env:LOCALAPPDATA 'CamRec'
 $ScriptPath = Join-Path $AppDir 'camrec_windows.py'
@@ -37,6 +38,8 @@ if (-not (Test-Path $PythonW)) { $PythonW = $Python }
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 Invoke-WebRequest "$RepoRaw/camrec_windows.py" -OutFile $ScriptPath -UseBasicParsing
+Invoke-WebRequest "$RepoRaw/camrec_windows_actions.py" -OutFile (Join-Path $AppDir 'camrec_windows_actions.py') -UseBasicParsing
+Invoke-WebRequest "$RepoRoot/camrec_preview.py" -OutFile (Join-Path $AppDir 'camrec_preview.py') -UseBasicParsing
 
 $CmdPath = Join-Path $AppDir 'CamRec.cmd'
 @"
