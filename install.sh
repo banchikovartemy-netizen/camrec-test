@@ -123,7 +123,8 @@ EOF
 chmod 0644 "$DESKTOP_FILE"
 
 systemctl daemon-reload
-systemctl enable --now camrec.service
+systemctl enable camrec.service
+systemctl restart camrec.service
 
 echo
 echo "Готово. Запуск: camrec"
