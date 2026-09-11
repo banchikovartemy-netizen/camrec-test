@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
     'usb_audio_device': 'default',
     'autostart_enabled': False,
     'autostart_source': 'usb',
+    'preview_enabled': False,
 }
 
 ALLOWED_RES = {'640x480', '1280x720', '1280x960', '1920x1080'}
@@ -82,6 +83,7 @@ def validate(raw):
     cfg['usb_audio_device'] = str(raw.get('usb_audio_device', 'default')).strip() or 'default'
     cfg['autostart_enabled'] = bool(raw.get('autostart_enabled', False))
     cfg['autostart_source'] = raw.get('autostart_source') if raw.get('autostart_source') in ('usb', 'network') else 'usb'
+    cfg['preview_enabled'] = bool(raw.get('preview_enabled', False))
     return cfg
 
 
@@ -140,7 +142,7 @@ def signature(cfg):
     return (
         cfg['source_type'], cfg['usb_device'], cfg['network_url'], username,
         cfg['resolution'], cfg['framerate'], cfg['segment_minutes'],
-        cfg['audio_enabled'], cfg['usb_audio_device'],
+        cfg['audio_enabled'], cfg['usb_audio_device'], cfg['preview_enabled'],
     )
 
 
@@ -162,21 +164,21 @@ def build_command(cfg):
             '-f', 'v4l2', '-channel', '0', '-pixel_format', 'yuyv422',
             '-framerate', str(fps), '-video_size', cfg['resolution'], '-i', cfg['usb_device'],
         ]
+        video_map = '0:v:0'
+        audio_map = '1:a:0'
         if cfg['audio_enabled']:
-            cmd += [
-                '-thread_queue_size', '512', '-f', 'alsa', '-i', cfg['usb_audio_device'],
-                '-map', '0:v:0', '-map', '1:a:0',
-            ]
-        else:
-            cmd += ['-map', '0:v:0']
+            cmd += ['-thread_queue_size', '512', '-f', 'alsa', '-i', cfg['usb_audio_device']]
     else:
         url = authenticated_url(cfg['network_url'])
         if url.lower().startswith('rtsp://'):
             cmd += ['-rtsp_transport', 'tcp']
-        cmd += ['-i', url, '-map', '0:v:0']
-        if cfg['audio_enabled']:
-            cmd += ['-map', '0:a?']
+        cmd += ['-i', url]
+        video_map = '0:v:0'
+        audio_map = '0:a?'
 
+    cmd += ['-map', video_map]
+    if cfg['audio_enabled']:
+        cmd += ['-map', audio_map]
     cmd += [
         '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30',
         '-pix_fmt', 'yuv420p', '-g', str(gop), '-keyint_min', str(gop), '-sc_threshold', '0',
@@ -185,11 +187,18 @@ def build_command(cfg):
         cmd += ['-c:a', 'aac', '-b:a', '96k', '-ar', '48000', '-af', 'aresample=async=1:first_pts=0']
     else:
         cmd += ['-an']
-
     cmd += [
         '-f', 'segment', '-segment_time', str(seg), '-segment_format', 'mp4',
         '-segment_format_options', 'movflags=+faststart', '-reset_timestamps', '1', '-strftime', '1', output,
     ]
+
+    if cfg.get('preview_enabled'):
+        cmd += [
+            '-map', video_map, '-an',
+            '-vf', 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1', '-r', '10',
+            '-c:v', 'mpeg2video', '-q:v', '8', '-g', '10', '-bf', '0',
+            '-f', 'mpegts', 'udp://127.0.0.1:23001?pkt_size=1316',
+        ]
     return cmd
 
 
